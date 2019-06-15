@@ -58,9 +58,6 @@ class VideoAnalysis(object):
         self.network_fps = Fps(25)
         self.analysis_fps = Fps(15)
 
-        self._faces = []
-        self._faces_lock = threading.Lock()
-
         self.video_analysis_queue = utils.RenewQueue()
         self.prepare_frame_queue = utils.RenewQueue()
         self.request_image_queue = utils.RenewQueue()
@@ -84,21 +81,11 @@ class VideoAnalysis(object):
     def __del__(self):
         pass
 
-    @property
-    def faces(self):
-        with self._faces_lock:
-            return self._faces
-
-    @faces.setter
-    def faces(self, value):
-        with self._faces_lock:
-            self._faces = value
-
     def run_get_frame(self):
         while True:
             frame = self.get_frame()
-            self.video_analysis_queue.put(frame)
-            self.prepare_frame_queue.put(frame)
+            self.video_analysis_queue.put(frame.copy())
+            self.prepare_frame_queue.put(frame.copy())
 
     def run_prepare_frame(self):
         while True:
@@ -110,7 +97,7 @@ class VideoAnalysis(object):
     def run_video_analysis(self):
         while True:
             frame = self.video_analysis_queue.get()
-            self.do_video_analysis(frame.copy())
+            self.do_video_analysis(frame)
 
     #@profile
     def do_video_analysis(self, frame):
@@ -118,8 +105,7 @@ class VideoAnalysis(object):
         self.analysis_fps.new_frame()
 
     def draw_video_analysis_overlay(self, frame):
-        pass
-        #frame = self.video_analysis.process_frame(frame)
+        self.video_analysis.draw_overlay(frame)
 
     def draw_fps(self, frame):
         height = frame.shape[0]
@@ -127,17 +113,17 @@ class VideoAnalysis(object):
         camera_fps = self.camera_fps()
         if camera_fps is not None:
             cv2.putText(frame, '{:5.2f} camera fps'.format(camera_fps),
-                        (10,height-50), self.font, 0.6, (250,25,250), 2)
+                        (10,height-50), self.font, 0.7, (250,25,250), 1)
 
         network_fps = self.network_fps()
         if network_fps is not None:
             cv2.putText(frame, '{:5.2f} effective fps'.format(network_fps),
-                        (10,height-30), self.font, 0.6, (250,25,250), 2)
+                        (10,height-30), self.font, 0.7, (250,25,250), 1)
 
         analysis_fps = self.analysis_fps()
         if analysis_fps is not None:
             cv2.putText(frame, '{:5.2f} analysis fps'.format(analysis_fps),
-                        (10,height-10), self.font, 0.6, (250,25,250), 2)
+                        (10,height-10), self.font, 0.7, (250,25,250), 1)
 
     def draw_date(self, frame):
         cv2.putText(frame, time.strftime("%c"), (10,20), self.font, 0.6,
@@ -146,7 +132,6 @@ class VideoAnalysis(object):
     #@profile
     def get_frame(self):
         success, frame = self.video_analysis.get_next_video_frame()
-        frame = self.video_analysis.process_frame(frame)
         self.camera_fps.new_frame()
         return frame
 
@@ -157,14 +142,13 @@ class VideoAnalysis(object):
         # video stream.
         ret, jpeg = cv2.imencode('.jpg', frame,
                                  (cv2.IMWRITE_JPEG_QUALITY, self.quality))
-        #cv2.resize() # TODO
         return jpeg.tobytes()
 
     #@profile
     def prepare_frame(self, frame):
+        self.draw_video_analysis_overlay(frame)
         self.draw_fps(frame)
         self.draw_date(frame)
-        self.draw_video_analysis_overlay(frame)
 
     #@profile
     def request_image(self):
@@ -178,7 +162,7 @@ class VideoAnalysis(object):
         self.do_video_analysis(frame)
         self.draw_fps(frame)
         self.draw_date(frame)
-        self.draw_faces_rectangles(frame)
+        self.draw_video_analysis_overlay(frame)
         return self.encode_frame_to_jpeg(frame)
 
     def mjpeg_generator(self):

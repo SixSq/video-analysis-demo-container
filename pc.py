@@ -2,6 +2,7 @@
 
 import sys
 import time
+import threading
 
 import cv2
 import numpy as np
@@ -22,9 +23,11 @@ class PersonCounter(object):
         self.out_width = None
         self.out_height = None
 
+        self._capture_lock = threading.Lock()
+
         self.params = dict(
             n_frames = 1,                  # analyze every Nth frame
-            n_first_frames = 50,           # analyze first N frames to create a backgroud model
+            n_first_frames = 15,           # analyze first N frames to create a backgroud model
             update_bg_every_n_frames = 50, # update the background model every N frames
             threshold = 30,                # threshold for foreground mask
             area_threshold = 1700,         # threshold of the area to treat the object as a person
@@ -63,6 +66,7 @@ class PersonCounter(object):
         self.persons = []
         self.current_person_id = 1
         self.counter = 0
+        self.contours = []
         self.bgmask = None
         self.bgmodel = None
         self.lightChange = False
@@ -71,27 +75,30 @@ class PersonCounter(object):
 Input:
     width : {} px
     height: {} px
+    fps: {}
 Output:
     width : {} px
     height: {} px
-        '''.format(self.width, self.height, self.out_width, self.out_height))
+        '''.format(self.width, self.height, self.fps, self.out_width, self.out_height))
 
     def get_next_video_frame(self):
-        return self.cap.read()
+        with self._capture_lock:
+            return self.cap.read()
 
     def create_background_model(self):
-        _, self.bgmodel = self.cap.read()
+        print('create_background_model')
+        _, self.bgmodel = self.get_next_video_frame()
         self.bgmask = 255 * np.ones((self.height, self.width), dtype=np.uint8)
         #if self.display_window:
             #cv2.imshow('video', self.bgmodel)
             #cv2.imshow('bgModel', self.bgmodel)
 
         #for _ in xrange(700):
-        #    ret, frame = self.cap.read()
+        #    ret, frame = self.get_next_video_frame()
         #    continue;
 
         for _ in range(self.params['n_first_frames']):
-            ret, frame = self.cap.read()
+            ret, frame = self.get_next_video_frame()
             self.bgmodel = cv2.addWeighted(self.bgmodel, 0.5, frame, 0.5, 0)
             #if self.display_window:
                 #cv2.imshow('video', frame)
@@ -105,7 +112,7 @@ Output:
         self.lightChange = False
 
         while(self.cap.isOpened()):
-            ret, frame = self.cap.read()
+            ret, frame = self.get_next_video_frame()
             if ret == False:
                 break
             self.process_frame(frame)
@@ -169,10 +176,10 @@ Output:
         diff_thres = cv2.morphologyEx(diff_thres, cv2.MORPH_CLOSE, self.kernelCl) #Closing (dilate ->  erode)  para juntar regiones blancas.
 
         self.counter = 0
-        contours0, hierarchy = cv2.findContours(diff_thres, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)[-2:]
+        self.contours, hierarchy = cv2.findContours(diff_thres, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)[-2:]
 
-        for cnt in contours0:
-            cv2.drawContours(frame, cnt, -1, (0,255,0), 3, 8)
+        for cnt in self.contours:
+#D            cv2.drawContours(frame, cnt, -1, (0,255,0), 3, 8) ### DRAW ###
             area = cv2.contourArea(cnt)
             if area > self.params['area_threshold']:
                 #print("COUNT: " + str(self.counter))
@@ -182,7 +189,8 @@ Output:
                 M = cv2.moments(cnt)
                 cx = int(M['m10']/M['m00'])
                 cy = int(M['m01']/M['m00'])
-                x,y,w,h = cv2.boundingRect(cnt)
+                bounding_rect = cv2.boundingRect(cnt)
+                x,y,w,h = bounding_rect
                 self.counter += 1
 
                 new = True
@@ -203,60 +211,82 @@ Output:
                             #print "STANDING"
                         self.bgmask[y:y+h, x:x+w] = 255 * np.ones((h, w), dtype=np.uint8)
 
-                        p.updateCoords(cx,cy)   #actualiza coordenadas en el objeto and resets age
+                        p.updateCoords(cx,cy, bounding_rect)   #actualiza coordenadas en el objeto and resets age
                         break
                 if new == True:
-                    newp = Person.MyPerson(self.current_person_id, cx, cy, self.params['max_person_age'])
+                    newp = Person.MyPerson(self.current_person_id, cx, cy, bounding_rect, self.params['max_person_age'])
                     self.persons.append(newp)
                     self.current_person_id += 1
                 #################
                 #   DIBUJOS     #
                 #################
-                cv2.circle(frame, (cx,cy), 5, (0,0,255), -1)
-                cv2.rectangle(frame, (x,y), (x+w,y+h), (0,255,0), 2)
-                cv2.drawContours(frame, cnt, -1, (0,255,0), 3)
+#D                cv2.circle(frame, (cx,cy), 5, (0,0,255), -1) ### DRAW ###
+#D                cv2.rectangle(frame, (x,y), (x+w,y+h), (0,255,0), 2) ### DRAW ###
+#D                cv2.drawContours(frame, cnt, -1, (0,255,0), 3) ### DRAW ###
 
         #########################
         # DIBUJAR TRAYECTORIAS  #
         #########################
-        for p in self.persons:
-            if len(p.getTracks()) >= 2:
-                pts = np.array(p.getTracks(), np.int32)
-                pts = pts.reshape( (-1,1,2) )
-                frame = cv2.polylines(frame, [pts], False, p.getRGB())
-#LS            if p.getId() == 9:
-#LS                print(str(p.getX()), ',', str(p.getY()))
-            cv2.putText(frame, str(p.getId()), (p.getX(),p.getY()), self.font, 0.3, p.getRGB(), 1, cv2.LINE_AA)
+#D        for p in self.persons:
+#D            if len(p.getTracks()) >= 2:
+#D                pts = np.array(p.getTracks(), np.int32)
+#D                pts = pts.reshape( (-1,1,2) )
+#D                ### DRAW ### frame = cv2.polylines(frame, [pts], False, p.getRGB())
+#_#            if p.getId() == 9:
+#_#                print(str(p.getX()), ',', str(p.getY()))
+#D            cv2.putText(frame, str(p.getId()), (p.getX(),p.getY()), self.font, 0.3, p.getRGB(), 1, cv2.LINE_AA) ### DRAW ###
 
-        cv2.putText(frame, "COUNTER: " + str(self.counter),(int(0.8*self.width),30), self.font, 0.5, (0,255,0), 1, cv2.LINE_AA)
+#D        cv2.putText(frame, "COUNTER: " + str(self.counter),(int(0.8*self.width),30), self.font, 0.5, (0,255,0), 1, cv2.LINE_AA) ### DRAW ###
 
         out1 = frame.copy()
         if self.save_output:
             self.outStream2.write(frame) # Write the frame
 
-        frame_orig     = cv2.copyMakeBorder(frame_orig,   0,3,0,3, cv2.BORDER_CONSTANT, value=[0,255,0])
-        frame          = cv2.copyMakeBorder(frame,        0,3,3,0, cv2.BORDER_CONSTANT, value=[0,255,0])
-        bgmodel_border = cv2.copyMakeBorder(self.bgmodel, 3,0,0,3, cv2.BORDER_CONSTANT, value=[0,255,0])
-        diff_thres     = cv2.copyMakeBorder(diff_thres,   3,0,3,0, cv2.BORDER_CONSTANT, value=[0,255,0])
+        if self.save_output or self.display_window:
+            frame_orig     = cv2.copyMakeBorder(frame_orig,   0,3,0,3, cv2.BORDER_CONSTANT, value=[0,255,0])
+            frame          = cv2.copyMakeBorder(frame,        0,3,3,0, cv2.BORDER_CONSTANT, value=[0,255,0])
+            bgmodel_border = cv2.copyMakeBorder(self.bgmodel, 3,0,0,3, cv2.BORDER_CONSTANT, value=[0,255,0])
+            diff_thres     = cv2.copyMakeBorder(diff_thres,   3,0,3,0, cv2.BORDER_CONSTANT, value=[0,255,0])
 
-        #cv2.putText(frame, "COUNTER: " + str(self.counter),(int(0.8*self.width),30), self.font, 0.5, (0,255,0), 1, cv2.LINE_AA)
+            #cv2.putText(frame, "COUNTER: " + str(self.counter),(int(0.8*self.width),30), self.font, 0.5, (0,255,0), 1, cv2.LINE_AA)
 
-        diff_thres = cv2.cvtColor(diff_thres, cv2.COLOR_GRAY2BGR)
-        top    = np.concatenate((frame_orig, frame),          axis=1)
-        bottom = np.concatenate((bgmodel_border, diff_thres), axis=1)
-        whole  = np.concatenate((top, bottom),                axis=0)
+            diff_thres = cv2.cvtColor(diff_thres, cv2.COLOR_GRAY2BGR)
+            top    = np.concatenate((frame_orig, frame),          axis=1)
+            bottom = np.concatenate((bgmodel_border, diff_thres), axis=1)
+            whole  = np.concatenate((top, bottom),                axis=0)
 
-        out2 = whole.copy()
-        if self.save_output:
-            self.outStream1.write(whole) # Write the frame
+            out2 = whole.copy()
+            if self.save_output:
+                self.outStream1.write(whole) # Write the frame
 
-        whole = cv2.resize(whole, (int(whole.shape[1]/1.5), int(whole.shape[0]/1.5)), interpolation = cv2.INTER_AREA)
-        if self.display_window:
-            cv2.imshow('video2', whole)
+            whole = cv2.resize(whole, (int(whole.shape[1]/1.5), int(whole.shape[0]/1.5)), interpolation = cv2.INTER_AREA)
+            if self.display_window:
+                cv2.imshow('video2', whole)
 
         if self.out_width != self.width and self.out_height != self.height:
             out1 = cv2.resize(out1, (self.out_width, self.out_height), interpolation=cv2.INTER_AREA)
         return out1 #, out2
+
+    def draw_overlay(self, frame):
+        for cnt in self.contours:
+            cv2.drawContours(frame, cnt, -1, (0,255,0), 3, 8)
+
+        for p in self.persons:
+            cx = p.getX()
+            cy = p.getY()
+            x,y,w,h = p.getBoundingRect()
+
+            cv2.circle(frame, (cx,cy), 5, (0,0,255), -1)
+            cv2.rectangle(frame, (x,y), (x+w,y+h), (0,255,0), 2)
+            #cv2.drawContours(frame, cnt, -1, (0,255,0), 3)
+
+            if len(p.getTracks()) >= 2:
+                pts = np.array(p.getTracks(), np.int32)
+                pts = pts.reshape( (-1,1,2) )
+                cv2.polylines(frame, [pts], False, p.getRGB())
+            cv2.putText(frame, str(p.getId()), (cx,cy), self.font, 0.3, p.getRGB(), 1, cv2.LINE_AA)
+
+        cv2.putText(frame, "COUNTER: " + str(self.counter),(int(0.8*self.width),30), self.font, 0.5, (0,255,0), 1, cv2.LINE_AA)
 
     def _light_change_solution_1(self, frame):
         ''' Update background model more frequently '''
@@ -272,9 +302,9 @@ Output:
     def _light_change_solution_2(self, frame):
         ''' Create background model from scratch '''
         if self.lightChange:
-            ret, self.bgmodel = self.cap.read()
+            ret, self.bgmodel = self.get_next_video_frame()
             for _ in xrange(self.params['n_first_frames']):
-                ret, frame = self.cap.read()
+                ret, frame = self.get_next_video_frame()
                 self.bgmodel = cv2.addWeighted(self.bgmodel, 0.5, frame, 0.5, 0)
                 #if self.display_window:
                 #cv2.imshow('video', frame)

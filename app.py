@@ -41,8 +41,8 @@ def get_argument_parser():
     parser.add_argument('--help', action='help', help='show this help message and exit')
     parser.add_argument('-i', '--input_source', default=os.environ.get('INPUT_SOURCE', 0),       help='Video input source')
     parser.add_argument('-q', '--quality',      default=os.environ.get('QUALITY', 80), type=int, help='Quality of the output stream [0-100]')
-    parser.add_argument('-w', '--width',        default=os.environ.get('WIDTH', 1280), type=int, help='Quality of the output stream')
-    parser.add_argument('-h', '--height',       default=os.environ.get('HEIGHT', 720), type=int, help='Quality of the output stream')
+    parser.add_argument('-w', '--width',        default=os.environ.get('WIDTH', 1280), type=int, help='Width of the output stream')
+    parser.add_argument('-h', '--height',       default=os.environ.get('HEIGHT', 720), type=int, help='Height of the output stream')
     parser.add_argument('-t', '--threads',      default=os.environ.get('THREADS',  2), type=int, help='Number of thread to run analysis')
     parser.add_argument('--n_frames',           default=os.environ.get('N_FRAMES', 1), type=int, help='Run analysis every n frames')
     # TODO

@@ -5,11 +5,12 @@ class MyPerson:
 
     tracks = []
 
-    def __init__(self, i, xi, yi, max_age):
+    def __init__(self, i, xi, yi, bounding_rect, max_age):
         self.i = i
         self.x = xi
         self.y = yi
         self.tracks = []
+        self.bounding_rect = bounding_rect
         self.R = randint(0,255)
         self.G = randint(0,255)
         self.B = randint(0,255)
@@ -41,11 +42,15 @@ class MyPerson:
     def getY(self):
         return self.y
 
-    def updateCoords(self, xn, yn):
+    def getBoundingRect(self):
+        return self.bounding_rect
+
+    def updateCoords(self, xn, yn, bounding_rect):
         #self.age = 0
         self.tracks.append([self.x,self.y])
         self.x = xn
         self.y = yn
+        self.bounding_rect = bounding_rect
 
     def setDone(self):
         self.done = True
