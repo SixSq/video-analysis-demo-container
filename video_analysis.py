@@ -46,10 +46,11 @@ class Fps(object):
 class VideoAnalysis(object):
     __metaclass__ = utils.Singleton
 
-    def __init__(self, input_source=0, quality=80, width=1280, height=720, threads=0):
+    def __init__(self, input_source=0, quality=80, width=1280, height=720, threads=0, n_frames=1):
         self.quality = quality
 
-        self.video_analysis = PersonCounter(input_source, display_window=False)
+        self.video_analysis = PersonCounter(input_source, width=width, height=height, display_window=False,
+                                            algorithm_params=dict(n_frames=n_frames))
 
         self.font = cv2.FONT_HERSHEY_SIMPLEX
 
@@ -63,9 +64,6 @@ class VideoAnalysis(object):
         self.video_analysis_queue = utils.RenewQueue()
         self.prepare_frame_queue = utils.RenewQueue()
         self.request_image_queue = utils.RenewQueue()
-
-        self.width = width
-        self.height = height
 
         self.video_analysis_threads_number = threads
 
@@ -112,10 +110,7 @@ class VideoAnalysis(object):
     def run_video_analysis(self):
         while True:
             frame = self.video_analysis_queue.get()
-            self.do_video_analysis(frame)
-
-    def script_path(self):
-        return os.path.dirname(os.path.realpath(__file__))
+            self.do_video_analysis(frame.copy())
 
     #@profile
     def do_video_analysis(self, frame):
@@ -127,20 +122,22 @@ class VideoAnalysis(object):
         #frame = self.video_analysis.process_frame(frame)
 
     def draw_fps(self, frame):
+        height = frame.shape[0]
+
         camera_fps = self.camera_fps()
         if camera_fps is not None:
             cv2.putText(frame, '{:5.2f} camera fps'.format(camera_fps),
-                        (10,self.height-50), self.font, 0.6, (250,25,250), 2)
+                        (10,height-50), self.font, 0.6, (250,25,250), 2)
 
         network_fps = self.network_fps()
         if network_fps is not None:
             cv2.putText(frame, '{:5.2f} effective fps'.format(network_fps),
-                        (10,self.height-30), self.font, 0.6, (250,25,250), 2)
+                        (10,height-30), self.font, 0.6, (250,25,250), 2)
 
         analysis_fps = self.analysis_fps()
         if analysis_fps is not None:
             cv2.putText(frame, '{:5.2f} analysis fps'.format(analysis_fps),
-                        (10,self.height-10), self.font, 0.6, (250,25,250), 2)
+                        (10,height-10), self.font, 0.6, (250,25,250), 2)
 
     def draw_date(self, frame):
         cv2.putText(frame, time.strftime("%c"), (10,20), self.font, 0.6,
@@ -160,7 +157,7 @@ class VideoAnalysis(object):
         # video stream.
         ret, jpeg = cv2.imencode('.jpg', frame,
                                  (cv2.IMWRITE_JPEG_QUALITY, self.quality))
-        # cv2.resize() # TODO
+        #cv2.resize() # TODO
         return jpeg.tobytes()
 
     #@profile

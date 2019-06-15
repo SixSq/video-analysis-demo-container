@@ -15,10 +15,12 @@ class PersonCounter(object):
     kernelOp = np.ones((3,3),np.uint8)
     kernelCl = np.ones((11,11),np.uint8)
 
-    def __init__(self, input_source, display_window=True, save_output=False, output_filename_prefix='output', algorithm_params=None):
+    def __init__(self, input_source, width=None, height=None, display_window=True, save_output=False, output_filename_prefix='output', algorithm_params=None):
         self.input_source = input_source
         self.save_output = save_output
         self.display_window = display_window
+        self.out_width = None
+        self.out_height = None
 
         self.params = dict(
             n_frames = 1,                  # analyze every Nth frame
@@ -33,6 +35,13 @@ class PersonCounter(object):
             self.params.update(algorithm_params)
 
         self.cap = cv2.VideoCapture(self.input_source);    # open the video stream from a file a device or
+
+        if width:
+            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+            self.out_width = width
+        if height:
+            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+            self.out_height = height
 
         self.fps    = self.cap.get(cv2.CAP_PROP_FPS)
         self.width  = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -57,6 +66,15 @@ class PersonCounter(object):
         self.bgmask = None
         self.bgmodel = None
         self.lightChange = False
+
+        print('''
+Input:
+    width : {} px
+    height: {} px
+Output:
+    width : {} px
+    height: {} px
+        '''.format(self.width, self.height, self.out_width, self.out_height))
 
     def get_next_video_frame(self):
         return self.cap.read()
@@ -236,6 +254,8 @@ class PersonCounter(object):
         if self.display_window:
             cv2.imshow('video2', whole)
 
+        if self.out_width != self.width and self.out_height != self.height:
+            out1 = cv2.resize(out1, (self.out_width, self.out_height), interpolation=cv2.INTER_AREA)
         return out1 #, out2
 
     def _light_change_solution_1(self, frame):
