@@ -8,6 +8,8 @@ import utils
 import threading
 import collections
 
+import paho.mqtt.publish as mqtt_publish
+
 from pc import PersonCounter
 
 #from profilehooks import profile # pip install profilehooks
@@ -46,11 +48,20 @@ class Fps(object):
 class VideoAnalysis(object):
     __metaclass__ = utils.Singleton
 
-    def __init__(self, input_source=0, quality=80, width=1280, height=720, threads=0, n_frames=1):
+    def __init__(self, input_source=0, quality=80, width=1280, height=720, threads=0,
+                 mqtt_broker=None, mqtt_topic='default'):
         self.quality = quality
 
-        self.video_analysis = PersonCounter(input_source, width=width, height=height, display_window=False,
-                                            algorithm_params=dict(n_frames=n_frames))
+        self.mqtt = {}
+        if mqtt_broker:
+            mqtt_host_port = mqtt_broker.split(':')
+            self.mqtt['hostname'] = mqtt_host_port[0]
+            if len(mqtt_host_port) > 1:
+                self.mqtt['port'] = int(mqtt_host_port[1])
+        self.mqtt_topic=mqtt_topic
+
+        self.video_analysis = PersonCounter(input_source, width=width, height=height, display_window=False, #algorithm_params=dict(n_frames=n_frames),
+                                            mqtt_fn=self.mqtt_send_message)
 
         self.font = cv2.FONT_HERSHEY_SIMPLEX
 
@@ -80,6 +91,14 @@ class VideoAnalysis(object):
 
     def __del__(self):
         pass
+
+    def mqtt_send_message(self, message):
+        if not self.mqtt:
+            return
+        try:
+            mqtt_publish.single(self.mqtt_topic, message, **self.mqtt)
+        except:
+            pass
 
     def run_get_frame(self):
         while True:
@@ -113,17 +132,17 @@ class VideoAnalysis(object):
         camera_fps = self.camera_fps()
         if camera_fps is not None:
             cv2.putText(frame, '{:5.2f} camera fps'.format(camera_fps),
-                        (10,height-50), self.font, 0.7, (250,25,250), 1)
+                        (10,height-50), self.font, 0.8, (250,25,250), 2)
 
         network_fps = self.network_fps()
         if network_fps is not None:
             cv2.putText(frame, '{:5.2f} effective fps'.format(network_fps),
-                        (10,height-30), self.font, 0.7, (250,25,250), 1)
+                        (10,height-30), self.font, 0.8, (250,25,250), 2)
 
         analysis_fps = self.analysis_fps()
         if analysis_fps is not None:
             cv2.putText(frame, '{:5.2f} analysis fps'.format(analysis_fps),
-                        (10,height-10), self.font, 0.7, (250,25,250), 1)
+                        (10,height-10), self.font, 0.8, (250,25,250), 2)
 
     def draw_date(self, frame):
         cv2.putText(frame, time.strftime("%c"), (10,20), self.font, 0.6,

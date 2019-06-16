@@ -43,8 +43,9 @@ def get_argument_parser():
     parser.add_argument('-q', '--quality',      default=os.environ.get('QUALITY', 80), type=int, help='Quality of the output stream [0-100]')
     parser.add_argument('-w', '--width',        default=os.environ.get('WIDTH', 1280), type=int, help='Width of the output stream')
     parser.add_argument('-h', '--height',       default=os.environ.get('HEIGHT', 720), type=int, help='Height of the output stream')
-    parser.add_argument('-t', '--threads',      default=os.environ.get('THREADS',  2), type=int, help='Number of thread to run analysis')
-    parser.add_argument('--n_frames',           default=os.environ.get('N_FRAMES', 1), type=int, help='Run analysis every n frames')
+    parser.add_argument('-t', '--threads',      default=os.environ.get('THREADS',  1), type=int, help='Number of thread to run analysis')
+    parser.add_argument('--mqtt_broker', default=os.environ.get('MQTT_BROKER'), help='MQTT Broker TCP endpoint')
+    parser.add_argument('--mqtt_topic',  default=os.environ.get('MQTT_TOPIC', 'video_analysis/message'), help='MQTT Topic')
     # TODO
     #parser.add_argument('-d', '--debug', dest='debug', help='Show debug log level (all log messages).', action='store_true', default=False)
     #parser.add_argument('-q', '--quiet', dest='quiet', help='Show less log messages. Add more to get less details.', action='count', default=0)

@@ -16,12 +16,16 @@ class PersonCounter(object):
     kernelOp = np.ones((3,3),np.uint8)
     kernelCl = np.ones((11,11),np.uint8)
 
-    def __init__(self, input_source, width=None, height=None, display_window=True, save_output=False, output_filename_prefix='output', algorithm_params=None):
+    def __init__(self, input_source, width=None, height=None, display_window=True,
+                 save_output=False, output_filename_prefix='output',
+                 algorithm_params=None, mqtt_fn=None):
         self.input_source = input_source
         self.save_output = save_output
         self.display_window = display_window
         self.out_width = None
         self.out_height = None
+
+        self.mqtt_fn = mqtt_fn if mqtt_fn else lambda m: True
 
         self._capture_lock = threading.Lock()
 
@@ -217,6 +221,8 @@ Output:
                     newp = Person.MyPerson(self.current_person_id, cx, cy, bounding_rect, self.params['max_person_age'])
                     self.persons.append(newp)
                     self.current_person_id += 1
+
+                    self.mqtt_fn('Person detected')
                 #################
                 #   DIBUJOS     #
                 #################
