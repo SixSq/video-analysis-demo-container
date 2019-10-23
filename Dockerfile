@@ -1,7 +1,7 @@
 # hadolint ignore=DL3007
 FROM sixsq/opencv-python:latest
 
-RUN pip3 install flask paho-mqtt
+RUN pip3 install flask paho-mqtt requests
 
 RUN mkdir -p /root/video_analysis
 COPY *.py      /root/video_analysis/
