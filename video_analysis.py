@@ -110,7 +110,7 @@ class VideoAnalysis(object):
         try:
             requests.post(url, data=payload.encode())
         except Exception as e:
-            print "Unable to write into InfluxDB: %s" % e
+            print("Unable to write into InfluxDB: %s" % e)
             pass
 
     def influxdb_send_message(self, message):
