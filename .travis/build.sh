@@ -1,6 +1,6 @@
 #!/bin/bash -xe
 
-tag_name=${TRAVIS_TAG:-${TRAVIS_BRANCH}}
+tag_name=${TRAVIS_TAG:-$(echo ${TRAVIS_BRANCH} | tr '/' '-')}
 platform=${PLATFORM:-amd64}
 manifest=${DOCKER_ORG}/${DOCKER_IMAGE}:${tag_name}
 

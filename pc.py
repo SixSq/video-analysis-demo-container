@@ -18,7 +18,7 @@ class PersonCounter(object):
 
     def __init__(self, input_source, width=None, height=None, display_window=True,
                  save_output=False, output_filename_prefix='output',
-                 algorithm_params=None, mqtt_fn=None):
+                 algorithm_params=None, mqtt_fn=None, influxdb_fn=None, motion_counter_fn=None):
         self.input_source = input_source
         self.save_output = save_output
         self.display_window = display_window
@@ -26,6 +26,8 @@ class PersonCounter(object):
         self.out_height = None
 
         self.mqtt_fn = mqtt_fn if mqtt_fn else lambda m: True
+        self.influxdb_fn = influxdb_fn if influxdb_fn else lambda m: True
+        self.motion_counter_fn = motion_counter_fn if motion_counter_fn else lambda m: True
 
         self._capture_lock = threading.Lock()
 
@@ -222,7 +224,9 @@ Output:
                     self.persons.append(newp)
                     self.current_person_id += 1
 
-                    self.mqtt_fn('Person detected')
+                    self.mqtt_fn('Motion detected')
+                    self.influxdb_fn("motion_detected value=1")
+                    self.motion_counter_fn()
                 #################
                 #   DIBUJOS     #
                 #################

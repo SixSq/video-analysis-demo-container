@@ -7,6 +7,7 @@ import time
 import utils
 import threading
 import collections
+import requests
 
 import paho.mqtt.publish as mqtt_publish
 
@@ -60,8 +61,20 @@ class VideoAnalysis(object):
                 self.mqtt['port'] = int(mqtt_host_port[1])
         self.mqtt_topic=mqtt_topic
 
+        if os.getenv("INFLUXDB_ENDPOINT") and os.getenv("INFLUXDB_DATABASE"):
+            influxdb_endpoint = os.getenv("INFLUXDB_ENDPOINT")
+            if influxdb_endpoint[-1] == "/":
+                influxdb_endpoint = influxdb_endpoint[0:-1]
+
+            self.influxdb_url = '%s/write?db=%s' % (influxdb_endpoint, os.getenv("INFLUXDB_DATABASE"))
+        else:
+            self.influxdb_url = None
+
+        self.motion_counter_url = os.getenv("MOTION_COUNTER_URL") if os.getenv("MOTION_COUNTER_URL") else None
+
         self.video_analysis = PersonCounter(input_source, width=width, height=height, display_window=False, #algorithm_params=dict(n_frames=n_frames),
-                                            mqtt_fn=self.mqtt_send_message)
+                                            mqtt_fn=self.mqtt_send_message, influxdb_fn=self.influxdb_send_message,
+                                            motion_counter_fn=self.motion_counter_trigger)
 
         self.font = cv2.FONT_HERSHEY_SIMPLEX
 
@@ -91,6 +104,30 @@ class VideoAnalysis(object):
 
     def __del__(self):
         pass
+
+    @staticmethod
+    def send_to_influxdb(url, payload):
+        try:
+            requests.post(url, data=payload.encode())
+        except Exception as e:
+            print("Unable to write into InfluxDB: %s" % e)
+            pass
+
+    def influxdb_send_message(self, message):
+        if not self.influxdb_url:
+            return
+
+        tmp_thread = threading.Thread(target=self.send_to_influxdb, name='send_to_influxdb', args=[self.influxdb_url, message])
+        tmp_thread.daemon = True
+        tmp_thread.start()
+
+    def motion_counter_trigger(self):
+        if not self.motion_counter_url:
+            return
+
+        tmp_thread = threading.Thread(target=requests.get, name='trigger motion counter', args=[self.motion_counter_url])
+        tmp_thread.daemon = True
+        tmp_thread.start()
 
     def mqtt_send_message(self, message):
         if not self.mqtt:
