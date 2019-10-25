@@ -46,7 +46,7 @@ jobs:
     script: ./.travis/build.sh
     env: PLATFORM=amd64
   - script: ./.travis/build.sh
-   env: PLATFORM=arm64
+    env: PLATFORM=arm64
   - script: ./.travis/build.sh
     env: PLATFORM=arm
   - stage: deploy
